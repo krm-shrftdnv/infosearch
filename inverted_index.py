@@ -1,18 +1,28 @@
-import nltk
-from bs4 import BeautifulSoup
 from os import walk
+
+import nltk
 import pymorphy2
+from bs4 import BeautifulSoup
 
 invalid_poses = ['CONJ', 'PREP']
-cleaned_tokens = []
 inverted_index = dict()
 
 morph = pymorphy2.MorphAnalyzer()
 
+
+def update_inverted_index(index_map, array, value):
+    for elem in array:
+        if elem not in index_map.keys():
+            index_map[elem] = [value]
+        else:
+            index_map[elem].append(value)
+
+
 # getting tokens
-filenames = next(walk('../crawler/common/storage/'), (None, None, []))[2]
+filenames = next(walk('../crawler/common/storage'), (None, None, []))[2]
 for filename in filenames:
     with open('../crawler/common/storage/' + filename, mode='r', encoding='utf-8') as file:
+        cleaned_tokens = []
         data = file.read()
         soup = BeautifulSoup(data, features='html.parser')
         page_tokens = nltk.word_tokenize(' '.join(soup.find('div', {'class': 'post-inner'}).stripped_strings).lower())
@@ -21,36 +31,11 @@ for filename in filenames:
                 parsed_token = morph.parse(token)[0]
                 if parsed_token.tag.POS and parsed_token.tag.POS not in invalid_poses:
                     cleaned_tokens.append(token)
+        cleaned_tokens = set(cleaned_tokens)
+        value = filename.split('.')[0]
+        update_inverted_index(inverted_index, cleaned_tokens, value)
 
-tokens_set = set(cleaned_tokens)
-
-# writing tokens
-with open('tokens.txt', mode='w', encoding='utf-8') as tokens:
-    for token in tokens_set:
-        tokens.write(f'{token}\n')
-
-# getting lemmas
-lemma_mapping = dict()
-for token in tokens_set:
-    parsed_token = morph.parse(token)[0]
-    token_lemma = parsed_token.normal_form
-    if token_lemma not in lemma_mapping.keys():
-        lemma_mapping[token_lemma] = [token]
-    else:
-        lemma_mapping[token_lemma].append(token)
-
-
-def map_insert(map ,key, value):
-    for token in tokens_set:
-        parsed_token = morph.parse(token)[0]
-        token_lemma = parsed_token.normal_form
-        if token_lemma not in map.keys():
-            map[token_lemma] = [token]
-        else:
-            map[token_lemma].append(token)
-
-
-# writing lemmas
-with open('lemmas.txt', mode='w', encoding='utf-8') as lemmas:
-    for key, values in lemma_mapping.items():
-        lemmas.write(f'{key} {" ".join(values)}\n')
+# writing inverted index
+with open('inverted_index.txt', mode='w', encoding='utf-8') as file:
+    for key, values in inverted_index.items():
+        file.write(f'{key} {" ".join(values)}\n')
